@@ -1,0 +1,32 @@
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/cascade.json`.
+ */
+export type Cascade = {
+  "address": "6erxegH47t73aQjWm3fZEkwva57tz2JH7ZMxdoayzxVQ",
+  "metadata": {
+    "name": "cascade",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "The Hourly Payroll Platform"
+  },
+  "instructions": [
+    {
+      "name": "greet",
+      "discriminator": [
+        203,
+        194,
+        3,
+        150,
+        228,
+        58,
+        181,
+        62
+      ],
+      "accounts": [],
+      "args": []
+    }
+  ]
+};
