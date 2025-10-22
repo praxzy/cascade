@@ -7,19 +7,19 @@ This document explains the Cascade on-chain program (program id `6erxegH47t73aQj
 - **PaymentStream PDA**  
   Derived with seeds `[b"stream", employer, employee]`. Stores all stream metadata and acts as the authority over the vault. The struct lives in `programs/cascade/src/state/payment_stream.rs` and has the following fields:
 
-  | Field | Type | Meaning |
-  | --- | --- | --- |
-  | `employer` | `Pubkey` | Signer that funds the stream and retains emergency rights. |
-  | `employee` | `Pubkey` | Intended recipient of the streamed funds. Must sign withdrawals and activity refreshes. |
-  | `mint` | `Pubkey` | SPL mint of the streamed token (e.g. USDC). |
-  | `vault` | `Pubkey` | PDA-owned token account that holds escrowed funds. |
-  | `hourly_rate` | `u64` | Amount of tokens that vest per hour. |
-  | `total_deposited` | `u64` | Cumulative funds the employer has deposited into the stream. Serves as the vesting cap. |
-  | `withdrawn_amount` | `u64` | Total tokens already claimed by the employee. |
-  | `created_at` | `i64` | UTC timestamp when the stream was created. |
-  | `employee_last_activity_at` | `i64` | UTC timestamp of the employee’s last withdrawal or refresh. |
-  | `is_active` | `bool` | Guard flag. Emergency withdrawal sets this to `false`. |
-  | `bump` | `u8` | PDA bump used when signing CPI calls. |
+  | Field                       | Type     | Meaning                                                                                 |
+  | --------------------------- | -------- | --------------------------------------------------------------------------------------- |
+  | `employer`                  | `Pubkey` | Signer that funds the stream and retains emergency rights.                              |
+  | `employee`                  | `Pubkey` | Intended recipient of the streamed funds. Must sign withdrawals and activity refreshes. |
+  | `mint`                      | `Pubkey` | SPL mint of the streamed token (e.g. USDC).                                             |
+  | `vault`                     | `Pubkey` | PDA-owned token account that holds escrowed funds.                                      |
+  | `hourly_rate`               | `u64`    | Amount of tokens that vest per hour.                                                    |
+  | `total_deposited`           | `u64`    | Cumulative funds the employer has deposited into the stream. Serves as the vesting cap. |
+  | `withdrawn_amount`          | `u64`    | Total tokens already claimed by the employee.                                           |
+  | `created_at`                | `i64`    | UTC timestamp when the stream was created.                                              |
+  | `employee_last_activity_at` | `i64`    | UTC timestamp of the employee’s last withdrawal or refresh.                             |
+  | `is_active`                 | `bool`   | Guard flag. Emergency withdrawal sets this to `false`.                                  |
+  | `bump`                      | `u8`     | PDA bump used when signing CPI calls.                                                   |
 
 - **Vault PDA**  
   Derived with seeds `[b"vault", stream_pubkey]`. It is initialized as an SPL token account and its authority is set to the PaymentStream PDA. All inflows (employer deposits) and outflows (employee withdrawals or emergency refunds) pass through this vault.
@@ -109,7 +109,7 @@ import {
   getEmployerEmergencyWithdrawInstruction,
   getCloseStreamInstruction,
   fetchPaymentStream,
-} from '../src/client/js';
+} from '../src/client/js'
 ```
 
 ### Connecting and Sending Transactions
@@ -117,28 +117,20 @@ import {
 Below is an example showing how to create a stream and immediately send the transaction using the async helper (which derives the PDAs automatically):
 
 ```ts
-import { getCreateStreamInstructionAsync } from '../src/client/js';
-import type { Address } from 'gill';
-import {
-  createSolanaClient,
-  createTransaction,
-  generateKeyPairSigner,
-  signTransactionMessageWithSigners,
-} from 'gill';
-import { getAssociatedTokenAccountAddress } from 'gill/programs/token';
+import { getCreateStreamInstructionAsync } from '../src/client/js'
+import type { Address } from 'gill'
+import { createSolanaClient, createTransaction, generateKeyPairSigner, signTransactionMessageWithSigners } from 'gill'
+import { getAssociatedTokenAccountAddress } from 'gill/programs/token'
 
 const { rpc, sendAndConfirmTransaction } = createSolanaClient({
   urlOrMoniker: 'devnet',
-});
+})
 
-const employer = await generateKeyPairSigner();
-const employee = await generateKeyPairSigner();
-const mint = 'So11111111111111111111111111111111111111112' as Address;
+const employer = await generateKeyPairSigner()
+const employee = await generateKeyPairSigner()
+const mint = 'So11111111111111111111111111111111111111112' as Address
 
-const employerTokenAccount = await getAssociatedTokenAccountAddress(
-  mint,
-  employer.address
-);
+const employerTokenAccount = await getAssociatedTokenAccountAddress(mint, employer.address)
 
 const createIx = await getCreateStreamInstructionAsync({
   employer,
@@ -147,19 +139,19 @@ const createIx = await getCreateStreamInstructionAsync({
   employerTokenAccount,
   hourlyRate: 10n,
   totalDeposit: 1_000n,
-});
+})
 
-const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+const { value: latestBlockhash } = await rpc.getLatestBlockhash().send()
 
 const transaction = createTransaction({
   version: 'legacy',
   feePayer: employer,
   instructions: [createIx],
   latestBlockhash,
-});
+})
 
-const signedTx = await signTransactionMessageWithSigners(transaction);
-await sendAndConfirmTransaction(signedTx);
+const signedTx = await signTransactionMessageWithSigners(transaction)
+await sendAndConfirmTransaction(signedTx)
 ```
 
 ### Withdrawing as the Employee
@@ -167,15 +159,15 @@ await sendAndConfirmTransaction(signedTx);
 Assuming you already have `rpc`, the `employer`/`employee` signers, and the shared `mint` from the previous snippet, the synchronous helpers expect you to pass the PDAs explicitly. You can reuse the same derivation logic on the client:
 
 ```ts
-import { CASCADE_PROGRAM_ADDRESS, getWithdrawInstruction } from '../src/client/js';
+import { CASCADE_PROGRAM_ADDRESS, getWithdrawInstruction } from '../src/client/js'
 import {
   createTransaction,
   getAddressEncoder,
   getBytesEncoder,
   getProgramDerivedAddress,
   signTransactionMessageWithSigners,
-} from 'gill';
-import { getAssociatedTokenAccountAddress } from 'gill/programs/token';
+} from 'gill'
+import { getAssociatedTokenAccountAddress } from 'gill/programs/token'
 
 // Derive the stream PDA once you know employer + employee.
 const [stream] = await getProgramDerivedAddress({
@@ -185,7 +177,7 @@ const [stream] = await getProgramDerivedAddress({
     getAddressEncoder().encode(employer.address),
     getAddressEncoder().encode(employee.address),
   ],
-});
+})
 
 const [vault] = await getProgramDerivedAddress({
   programAddress: CASCADE_PROGRAM_ADDRESS,
@@ -193,9 +185,9 @@ const [vault] = await getProgramDerivedAddress({
     getBytesEncoder().encode(new Uint8Array([118, 97, 117, 108, 116])), // "vault"
     getAddressEncoder().encode(stream),
   ],
-});
+})
 
-const employeeAta = await getAssociatedTokenAccountAddress(mint, employee.address);
+const employeeAta = await getAssociatedTokenAccountAddress(mint, employee.address)
 
 const withdrawIx = getWithdrawInstruction({
   employee,
@@ -203,47 +195,44 @@ const withdrawIx = getWithdrawInstruction({
   vault,
   employeeTokenAccount: employeeAta, // Populate this with the employee's SPL token account for the stream mint.
   amount: 50n,
-});
+})
 
-const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+const { value: latestBlockhash } = await rpc.getLatestBlockhash().send()
 const withdrawTx = createTransaction({
   version: 'legacy',
   feePayer: employee,
   instructions: [withdrawIx],
   latestBlockhash,
-});
+})
 
-const signedWithdraw = await signTransactionMessageWithSigners(withdrawTx);
-await sendAndConfirmTransaction(signedWithdraw);
+const signedWithdraw = await signTransactionMessageWithSigners(withdrawTx)
+await sendAndConfirmTransaction(signedWithdraw)
 ```
 
 ### Refreshing Activity without Withdrawing
 
 ```ts
-import { getRefreshActivityInstruction } from '../src/client/js';
-import {
-  createTransaction,
-  signTransactionMessageWithSigners,
-} from 'gill';
+import { getRefreshActivityInstruction } from '../src/client/js'
+import { createTransaction, signTransactionMessageWithSigners } from 'gill'
 
-const refreshIx = getRefreshActivityInstruction({ employee, stream });
-const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+const refreshIx = getRefreshActivityInstruction({ employee, stream })
+const { value: latestBlockhash } = await rpc.getLatestBlockhash().send()
 const refreshTx = createTransaction({
   version: 'legacy',
   feePayer: employee,
   instructions: [refreshIx],
   latestBlockhash,
-});
+})
 
-const signedRefresh = await signTransactionMessageWithSigners(refreshTx);
-await sendAndConfirmTransaction(signedRefresh);
+const signedRefresh = await signTransactionMessageWithSigners(refreshTx)
+await sendAndConfirmTransaction(signedRefresh)
 ```
 
 ### Topping Up Funding
 
 ```ts
-import { getTopUpStreamInstruction } from '../src/client/js';
-import { createTransaction, signTransactionMessageWithSigners } from 'gill';
+import { getTopUpStreamInstruction } from '../src/client/js'
+import { createTransaction, signTransactionMessageWithSigners } from 'gill'
 
 const topUpIx = getTopUpStreamInstruction({
   employer,
@@ -251,43 +240,43 @@ const topUpIx = getTopUpStreamInstruction({
   vault,
   employerTokenAccount,
   additionalAmount: 500n,
-});
+})
 
-const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+const { value: latestBlockhash } = await rpc.getLatestBlockhash().send()
 const topUpTx = createTransaction({
   version: 'legacy',
   feePayer: employer,
   instructions: [topUpIx],
   latestBlockhash,
-});
+})
 
-const signedTopUp = await signTransactionMessageWithSigners(topUpTx);
-await sendAndConfirmTransaction(signedTopUp);
+const signedTopUp = await signTransactionMessageWithSigners(topUpTx)
+await sendAndConfirmTransaction(signedTopUp)
 ```
 
 ### Employer Emergency Withdrawal
 
 ```ts
-import { getEmployerEmergencyWithdrawInstruction } from '../src/client/js';
-import { createTransaction, signTransactionMessageWithSigners } from 'gill';
+import { getEmployerEmergencyWithdrawInstruction } from '../src/client/js'
+import { createTransaction, signTransactionMessageWithSigners } from 'gill'
 
 const emergencyIx = getEmployerEmergencyWithdrawInstruction({
   employer,
   stream,
   vault,
   employerTokenAccount,
-});
+})
 
-const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+const { value: latestBlockhash } = await rpc.getLatestBlockhash().send()
 const emergencyTx = createTransaction({
   version: 'legacy',
   feePayer: employer,
   instructions: [emergencyIx],
   latestBlockhash,
-});
+})
 
-const signedEmergency = await signTransactionMessageWithSigners(emergencyTx);
-await sendAndConfirmTransaction(signedEmergency);
+const signedEmergency = await signTransactionMessageWithSigners(emergencyTx)
+await sendAndConfirmTransaction(signedEmergency)
 ```
 
 ### Closing the Stream
@@ -295,21 +284,21 @@ await sendAndConfirmTransaction(signedEmergency);
 After the vault balance reaches zero and the stream is marked inactive (either naturally or via emergency withdrawal), the employer can close the accounts to reclaim rent:
 
 ```ts
-import { getCloseStreamInstruction } from '../src/client/js';
-import { createTransaction, signTransactionMessageWithSigners } from 'gill';
+import { getCloseStreamInstruction } from '../src/client/js'
+import { createTransaction, signTransactionMessageWithSigners } from 'gill'
 
-const closeIx = getCloseStreamInstruction({ employer, stream, vault });
+const closeIx = getCloseStreamInstruction({ employer, stream, vault })
 
-const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+const { value: latestBlockhash } = await rpc.getLatestBlockhash().send()
 const closeTx = createTransaction({
   version: 'legacy',
   feePayer: employer,
   instructions: [closeIx],
   latestBlockhash,
-});
+})
 
-const signedClose = await signTransactionMessageWithSigners(closeTx);
-await sendAndConfirmTransaction(signedClose);
+const signedClose = await signTransactionMessageWithSigners(closeTx)
+await sendAndConfirmTransaction(signedClose)
 ```
 
 ### Reading Stream State
@@ -317,9 +306,9 @@ await sendAndConfirmTransaction(signedClose);
 Use the generated account fetcher to read the latest on-chain state:
 
 ```ts
-import { fetchPaymentStream } from '../src/client/js';
+import { fetchPaymentStream } from '../src/client/js'
 
-const streamAccount = await fetchPaymentStream(rpc, stream);
+const streamAccount = await fetchPaymentStream(rpc, stream)
 console.log({
   employer: streamAccount.data.employer,
   employee: streamAccount.data.employee,
@@ -329,7 +318,7 @@ console.log({
   createdAt: Number(streamAccount.data.createdAt),
   lastActivity: Number(streamAccount.data.employeeLastActivityAt),
   isActive: streamAccount.data.isActive,
-});
+})
 ```
 
 ## Operational Tips
