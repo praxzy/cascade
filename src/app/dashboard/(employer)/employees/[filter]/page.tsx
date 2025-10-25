@@ -1,0 +1,18 @@
+import { EmployeesTab } from '@/components/dashboard/tabs/employees-tab';
+
+const EMPLOYEE_FILTER_MAP: Record<string, string> = {
+  all: 'directory',
+  directory: 'directory',
+  ready: 'directory',
+  invited: 'invitations',
+  invitations: 'invitations',
+  archived: 'archived',
+};
+
+export default async function DashboardEmployeesFilterPage({ params }: { params: Promise<{ filter: string }> }) {
+  const { filter } = await params;
+  const rawFilter = filter?.toLowerCase();
+  const resolvedFilter = EMPLOYEE_FILTER_MAP[rawFilter] ?? 'directory';
+
+  return <EmployeesTab filterState={resolvedFilter} />;
+}
