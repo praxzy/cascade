@@ -1,5 +1,5 @@
-import DashboardFeature from '@/features/dashboard/dashboard-feature';
+import { LandingPage } from '@/components/landing/landing-page';
 
 export default function Home() {
-  return <DashboardFeature />;
+  return <LandingPage />;
 }
