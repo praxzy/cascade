@@ -3,17 +3,57 @@
 import { useEffect, useState } from 'react';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-import { ArrowRight, Check, Zap } from 'lucide-react';
+import { UiWallet, useWalletUi, useWalletUiWallet } from '@wallet-ui/react';
+import { ArrowRight, Check, Wallet, Zap } from 'lucide-react';
+import { toast } from 'sonner';
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { cn } from '@/lib/utils';
+
+function WalletOptionButton({ wallet, onConnected }: { wallet: UiWallet; onConnected: () => void }) {
+  const { connect, isConnecting } = useWalletUiWallet({ wallet });
+
+  const handleSelect = async () => {
+    try {
+      await connect();
+      onConnected();
+    } catch (error) {
+      console.error('Failed to connect wallet', error);
+      toast.error('Failed to connect wallet');
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      className="w-full justify-center gap-3 bg-card text-center hover:bg-muted"
+      onClick={handleSelect}
+      disabled={isConnecting}
+    >
+      <Avatar className="h-8 w-8 shrink-0 rounded-md p-1">
+        <AvatarImage src={wallet.icon} alt={wallet.name} />
+        <AvatarFallback>{wallet.name[0]}</AvatarFallback>
+      </Avatar>
+      <div className="flex flex-col items-center">
+        <span className="text-sm font-medium">{wallet.name}</span>
+        {isConnecting ? <span className="text-xs text-muted-foreground">Connecting…</span> : null}
+      </div>
+    </Button>
+  );
+}
 
 export const LandingPage = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isWalletDrawerOpen, setIsWalletDrawerOpen] = useState(false);
+  const router = useRouter();
+  const { account, connected, disconnect, wallets } = useWalletUi();
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setMounted(true));
@@ -57,11 +97,14 @@ export const LandingPage = () => {
             </Link>
           </div>
 
-          <Button asChild size="lg" className="gap-2 rounded-full">
-            <Link href="/dashboard">
-              Get Started
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex items-center justify-center gap-2 rounded-full border-border/60 bg-background hover:bg-muted"
+            onClick={() => setIsWalletDrawerOpen(true)}
+          >
+            <Wallet className="h-4 w-4" />
+            <span>{connected && account ? 'Manage Wallet' : 'Connect Wallet'}</span>
           </Button>
         </div>
       </nav>
@@ -91,7 +134,7 @@ export const LandingPage = () => {
             >
               Stream payments
               <br />
-              <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-primary to-primary/60 bg-clip-text text-transparent">
                 hour by hour
               </span>
             </h1>
@@ -107,27 +150,20 @@ export const LandingPage = () => {
               on-chain settlement and zero friction.
             </p>
 
-            <div
+            <Button
+              asChild
+              size="lg"
               className={cn(
-                'flex flex-col items-center justify-center gap-4 transition-all delay-[400ms] duration-500 sm:flex-row',
+                'group gap-2 rounded-full text-base transition-all duration-500 hover:scale-105',
                 mounted ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0',
               )}
+              style={{ transitionDelay: '400ms' }}
             >
-              <Button asChild size="lg" className="group gap-2 rounded-full text-base transition-all hover:scale-105">
-                <Link href="/dashboard">
-                  Start Streaming
-                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="gap-2 rounded-full text-base transition-all hover:scale-105"
-              >
-                <Link href="/account">Connect Wallet</Link>
-              </Button>
-            </div>
+              <Link href="/dashboard">
+                Start Streaming
+                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </Link>
+            </Button>
           </div>
         </div>
       </section>
@@ -208,6 +244,80 @@ export const LandingPage = () => {
           </div>
         </div>
       </section>
+
+      <Drawer open={isWalletDrawerOpen} onOpenChange={setIsWalletDrawerOpen} direction="top">
+        <DrawerContent className="mx-auto w-full max-w-lg rounded-b-3xl border-b border-border bg-card">
+          <DrawerHeader className="pb-0">
+            <div className="mx-auto mb-2 h-1 w-12 rounded-full bg-muted-foreground/40" />
+            <DrawerTitle className="text-center text-base font-semibold">
+              {connected && account ? 'Wallet Connected' : 'Connect a Wallet'}
+            </DrawerTitle>
+          </DrawerHeader>
+
+          <div className="space-y-4 px-4 pt-2 pb-6">
+            {connected && account ? (
+              <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
+                <p className="text-sm font-medium text-muted-foreground">Active wallet</p>
+                <p className="mt-1 font-mono text-sm">{account.address}</p>
+                <Button
+                  className="mt-4 w-full"
+                  onClick={() => {
+                    setIsWalletDrawerOpen(false);
+                    router.push('/dashboard');
+                  }}
+                >
+                  Open Dashboard
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="mt-2 w-full"
+                  onClick={async () => {
+                    try {
+                      await disconnect();
+                      toast.success('Wallet disconnected');
+                    } catch (error) {
+                      console.error('Failed to disconnect wallet', error);
+                      toast.error('Failed to disconnect wallet');
+                    }
+                  }}
+                >
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {wallets.length ? (
+                  wallets.map((wallet) => (
+                    <WalletOptionButton
+                      key={wallet.name}
+                      wallet={wallet}
+                      onConnected={() => {
+                        setIsWalletDrawerOpen(false);
+                        router.push('/dashboard');
+                      }}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      No wallets detected.{' '}
+                      <a
+                        className="text-primary underline"
+                        href="https://solana.com/solana-wallets"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Get a Solana wallet
+                      </a>{' '}
+                      to continue.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
 
       <footer
         className={cn(
