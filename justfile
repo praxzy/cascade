@@ -16,6 +16,9 @@ install:
 dev:
     pnpm dev
 
+# Run the next.js and databases
+dev-all: db-run dev
+
 # Run Next.js lint checks.
 lint:
     pnpm lint
@@ -72,3 +75,8 @@ anchor-deploy-testnet:
 
 anchor-deploy-mainnet:
     just anchor-deploy cluster=mainnet
+
+# db
+
+db-run: 
+    docker compose up -d
