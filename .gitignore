@@ -51,3 +51,9 @@ next-env.d.ts
 /anchor/target/.rustc_info.json
 test-ledger
 **/*.rs.bk
+
+# Rust Analyzer
+**/target/
+
+# Workflow
+.well-known
