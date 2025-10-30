@@ -32,6 +32,7 @@ export function TopUpAccountModal({ isOpen, onClose }: TopUpAccountModalProps) {
   const { completeSetupStep } = useDashboard();
   const { account, cluster } = useWalletUi();
 
+  const enableDevFaucet = process.env.NEXT_PUBLIC_CASCADE_ENABLE_DEV_FAUCET === 'true';
   const isProduction = process.env.NODE_ENV === 'production';
   const clusterMoniker: ClusterMoniker = cluster?.url === 'localnet' ? 'localnet' : 'devnet';
 
@@ -155,9 +156,11 @@ export function TopUpAccountModal({ isOpen, onClose }: TopUpAccountModalProps) {
       return;
     }
 
-    if (isProduction) {
+    // For hackathons: Allow faucet in production if explicitly enabled
+    if (isProduction && !enableDevFaucet) {
       toast.error('Top up unsupported', {
-        description: 'Automatic top ups are only available on devnet/localnet. Fund the account manually.',
+        description:
+          'Automatic top ups are only available on devnet/localnet. Fund the account manually or enable dev faucet.',
       });
       return;
     }
