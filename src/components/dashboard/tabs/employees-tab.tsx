@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -84,6 +84,7 @@ export function EmployeesTab({ filterState, employees }: EmployeesTabProps) {
   };
 
   const hasEmployees = useMemo(() => employees.length > 0, [employees]);
+  const needsFundingPrompt = setupProgress.walletConnected && !setupProgress.tokenAccountFunded;
   const selectedEmployee = useMemo(
     () => employees.find((employee) => employee.id === selectedEmployeeId) ?? null,
     [employees, selectedEmployeeId],
@@ -121,28 +122,37 @@ export function EmployeesTab({ filterState, employees }: EmployeesTabProps) {
         <Button
           onClick={() => setIsAddEmployeeModalOpen(true)}
           className="gap-2"
-          disabled={!setupProgress.walletConnected || !setupProgress.tokenAccountFunded}
+          disabled={!setupProgress.walletConnected}
         >
           <Plus className="h-4 w-4" />
           Invite Employee
         </Button>
       </div>
 
+      {needsFundingPrompt ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/10 px-4 py-4 text-sm text-amber-700">
+          <div className="flex items-start gap-3">
+            <PiggyBank className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="space-y-1">
+              <p className="font-medium text-amber-700">Optional: fund your payroll token account</p>
+              <p className="text-xs text-amber-700/90">
+                Top ups unlock automated payout summaries, but you can continue managing employees without funding.
+              </p>
+            </div>
+          </div>
+          <div>
+            <Button size="sm" variant="outline" onClick={() => setIsTopUpAccountModalOpen(true)}>
+              Top Up Account
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {!setupProgress.walletConnected ? (
         <EmptyState
           icon={<Wallet className="h-12 w-12 text-muted-foreground" />}
           title="Connect your employer wallet"
           description="Link a treasury wallet before inviting or managing employees."
-        />
-      ) : !setupProgress.tokenAccountFunded ? (
-        <EmptyState
-          icon={<PiggyBank className="h-12 w-12 text-muted-foreground" />}
-          title="Fund your default token account"
-          description="Top up the payroll token account to unlock employee invitations."
-          action={{
-            label: 'Top Up Account',
-            onClick: () => setIsTopUpAccountModalOpen(true),
-          }}
         />
       ) : !hasEmployees ? (
         <EmptyState
