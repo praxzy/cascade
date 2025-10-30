@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { useWalletUi, useWalletUiSigner, type UiWalletAccount } from '@wallet-ui/react';
+import { useWalletUi, type UiWalletAccount } from '@wallet-ui/react';
 import type { Address } from 'gill';
 import { toast } from 'sonner';
 
@@ -85,14 +85,12 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
   const router = useRouter();
   const { completeSetupStep, setAccountState, selectedEmployee } = useDashboard();
   const { account } = useWalletUi();
-  const signer = useWalletUiSigner({ account });
   const createStreamMutation = useCreateStreamMutation({ account: account as UiWalletAccount });
 
   const employerAddress = useMemo<Address | null>(() => {
-    if (signer?.address) return signer.address as Address;
     if (account?.address) return account.address as Address;
     return null;
-  }, [account?.address, signer?.address]);
+  }, [account?.address]);
 
   const employeesQuery = useDashboardEmployeesQuery({ enabled: isOpen });
   const tokenAccountsQuery = useGetTokenAccountsQuery({

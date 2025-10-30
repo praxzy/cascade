@@ -2,6 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 
 import { drizzleClientHttp } from '@/db';
 import { employees, organizationTokenAccounts, streams } from '@/db/schema';
+import { StreamState } from '@/lib/enums';
 import type { DashboardStream } from '@/types/stream';
 
 import { resolveOrganizationContext } from '../actions/organization-context';
@@ -63,6 +64,9 @@ export async function getStreamsForDashboard(): Promise<DashboardStream[]> {
     const totalDeposited = Number(row.totalDeposited ?? 0);
     const withdrawnAmount = Number(row.withdrawnAmount ?? 0);
     const vaultBalance = Math.max(totalDeposited - withdrawnAmount, 0);
+    const status = Object.values(StreamState).includes(row.status as StreamState)
+      ? (row.status as StreamState)
+      : StreamState.DRAFT;
 
     return {
       id: row.id,
@@ -80,7 +84,7 @@ export async function getStreamsForDashboard(): Promise<DashboardStream[]> {
       withdrawnAmount,
       vaultBalance,
       availableToWithdraw: vaultBalance,
-      status: row.status,
+      status,
       cluster: row.cluster,
       createdAt: toIsoString(row.createdAt) ?? new Date().toISOString(),
       lastActivityAt: toIsoString(row.lastActivityAt),

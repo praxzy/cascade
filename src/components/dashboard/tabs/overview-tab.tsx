@@ -4,9 +4,21 @@ import { useMemo } from 'react';
 
 import { AlertCircle, TrendingDown, Users, Zap } from 'lucide-react';
 
+import type { ActivityLogEntry } from '@/app/dashboard/actions/activity-log';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useDashboardActivityQuery } from '@/features/dashboard/data-access/use-dashboard-activity-query';
+import { useDashboardStreamsQuery } from '@/features/dashboard/data-access/use-dashboard-streams-query';
 import { getAccountStateConfig } from '@/lib/config/account-states';
+import {
+  deriveOverviewAlerts,
+  deriveOverviewMetrics,
+  toTimelineEvents,
+  type OverviewAlert,
+  type OverviewMetric,
+  type TimelineEvent,
+} from '@/lib/dashboard/stream-insights';
+import type { DashboardStream } from '@/types/stream';
 
 import { useDashboard } from '../dashboard-context';
 import { EmptyState } from '../empty-state';
@@ -15,7 +27,12 @@ import { OverviewAlerts } from '../overview/overview-alerts';
 import { OverviewChecklist, type OverviewChecklistStep } from '../overview/overview-checklist';
 import { OverviewMetrics } from '../overview/overview-metrics';
 
-export function OverviewTab() {
+interface OverviewTabProps {
+  initialStreams: DashboardStream[];
+  initialActivity: ActivityLogEntry[];
+}
+
+export function OverviewTab({ initialStreams, initialActivity }: OverviewTabProps) {
   const {
     accountState,
     setIsCreateStreamModalOpen,
@@ -23,10 +40,22 @@ export function OverviewTab() {
     setIsTopUpAccountModalOpen,
     setupProgress,
   } = useDashboard();
+  const { data: streamData = [], isFetching: streamsFetching } = useDashboardStreamsQuery({
+    initialData: initialStreams,
+  });
+  const {
+    data: activityEntries = [],
+    isFetching: activityFetching,
+    error: activityError,
+  } = useDashboardActivityQuery({ initialData: initialActivity, limit: 10 });
 
   const config = getAccountStateConfig(accountState);
-  const hasStreams = config.hasStreams;
+  const hasStreams = streamData.length > 0 || config.hasStreams;
   const showSetupPhase = !config.setupComplete;
+
+  const metrics = useMemo<OverviewMetric[]>(() => deriveOverviewMetrics(streamData), [streamData]);
+  const alerts = useMemo<OverviewAlert[]>(() => deriveOverviewAlerts(streamData), [streamData]);
+  const timelineEvents = useMemo<TimelineEvent[]>(() => toTimelineEvents(activityEntries), [activityEntries]);
 
   const checklistSteps = useMemo<OverviewChecklistStep[]>(
     () => [
@@ -175,7 +204,7 @@ export function OverviewTab() {
       {!showSetupPhase && hasStreams && (
         <div className="space-y-4 sm:space-y-5 md:space-y-6">
           {/* KPI Row */}
-          {config.showMetrics && <OverviewMetrics />}
+          {config.showMetrics && <OverviewMetrics metrics={metrics} isLoading={streamsFetching} />}
 
           {/* Secondary metrics grid */}
           {config.showSecondaryMetrics && (
@@ -237,16 +266,26 @@ export function OverviewTab() {
           {/* Activity and Alerts */}
           {(config.showActivityTimeline || config.showAlerts) && (
             <div className="grid grid-cols-1 gap-4 sm:gap-5 md:gap-6 lg:grid-cols-3">
-              {config.showActivityTimeline && (
+              {config.showActivityTimeline ? (
                 <div className="lg:col-span-2">
-                  <OverviewActivityTimeline />
+                  <OverviewActivityTimeline
+                    events={timelineEvents}
+                    isLoading={activityFetching}
+                    error={activityError instanceof Error ? activityError : null}
+                  />
                 </div>
-              )}
-              {config.showAlerts && (
+              ) : null}
+              {config.showAlerts ? (
                 <div>
-                  <OverviewAlerts />
+                  <OverviewAlerts
+                    alerts={alerts}
+                    onCreateStream={() => setIsCreateStreamModalOpen(true)}
+                    onAddEmployee={() => setIsAddEmployeeModalOpen(true)}
+                    hasSetupProgress={setupProgress.employeeAdded}
+                    isFundingReady={setupProgress.tokenAccountFunded}
+                  />
                 </div>
-              )}
+              ) : null}
             </div>
           )}
         </div>
