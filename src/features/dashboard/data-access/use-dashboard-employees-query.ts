@@ -15,5 +15,6 @@ export function useDashboardEmployeesQuery({ enabled = true }: { enabled?: boole
       return result.data ?? [];
     },
     enabled,
+    refetchOnMount: 'always',
   });
 }
