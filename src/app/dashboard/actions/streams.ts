@@ -3,6 +3,7 @@
 import { getStreamsForDashboard } from '@/app/dashboard/data/streams';
 import { drizzleClientHttp } from '@/db';
 import { streams } from '@/db/schema';
+import { toNumericString } from '@/lib/numeric';
 import type { DashboardStream } from '@/types/stream';
 
 import { createActivityLog } from './activity-log';
@@ -57,9 +58,9 @@ export async function createStreamRecord(input: CreateStreamInput) {
       employerWallet: input.employerWallet,
       employerTokenAccount: input.employerTokenAccount,
       mintAddress: input.mintAddress,
-      hourlyRate: Number(input.hourlyRate),
-      totalDeposited: Number(input.totalDeposited),
-      withdrawnAmount: 0,
+      hourlyRate: toNumericString(input.hourlyRate),
+      totalDeposited: toNumericString(input.totalDeposited),
+      withdrawnAmount: toNumericString(0),
       status: 'active' as const,
       cluster,
       createdAt: new Date(),

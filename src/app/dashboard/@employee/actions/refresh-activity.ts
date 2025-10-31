@@ -79,7 +79,6 @@ export async function recordEmployeeActivityRefresh(input: unknown): Promise<Rec
     await drizzleClientHttp.insert(streamEvents).values({
       streamId: parsed.data.streamId,
       organizationId: context.organizationId,
-      employeeId: context.employeeId,
       eventType: 'stream_refresh_activity',
       actorType: 'employee',
       actorAddress: context.walletAddress ?? null,

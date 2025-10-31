@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { drizzleClientHttp } from '@/db';
 import { streamEvents, streams } from '@/db/schema';
+import { toNumericString } from '@/lib/numeric';
 
 import { resolveEmployeeContext } from './employee-context';
 
@@ -95,7 +96,7 @@ export async function recordEmployeeWithdrawal(input: unknown): Promise<RecordEm
     await drizzleClientHttp
       .update(streams)
       .set({
-        withdrawnAmount: updatedWithdrawn,
+        withdrawnAmount: toNumericString(updatedWithdrawn),
         lastActivityAt: new Date(),
       })
       .where(eq(streams.id, parsed.data.streamId));
@@ -103,13 +104,12 @@ export async function recordEmployeeWithdrawal(input: unknown): Promise<RecordEm
     await drizzleClientHttp.insert(streamEvents).values({
       streamId: parsed.data.streamId,
       organizationId: context.organizationId,
-      employeeId: context.employeeId,
       eventType: 'stream_withdrawn',
       actorType: 'employee',
       actorAddress: context.walletAddress ?? null,
       signature: parsed.data.signature ?? null,
       tokenAccount: parsed.data.tokenAccount ?? null,
-      amount: parsed.data.amount,
+      amount: toNumericString(parsed.data.amount),
       occurredAt: new Date(),
       metadata: {
         streamAddress: parsed.data.streamAddress,

@@ -137,7 +137,7 @@ function EmployeeDashboardOverviewInner({
   }, [setIsRefreshingActivity]);
 
   useEffect(() => {
-    setRefreshActivityHandler(() => handleRefreshActivity);
+    setRefreshActivityHandler(handleRefreshActivity);
     return () => setRefreshActivityHandler(null);
   }, [handleRefreshActivity, setRefreshActivityHandler]);
 

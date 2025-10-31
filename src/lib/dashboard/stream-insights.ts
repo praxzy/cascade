@@ -177,3 +177,81 @@ export function toTimelineEvents(entries: ActivityLogEntry[]): TimelineEvent[] {
     } satisfies TimelineEvent;
   });
 }
+
+export type SecondaryMetric = {
+  id: string;
+  label: string;
+  value: string | number;
+  description: string;
+  icon: 'alert' | 'trending-down' | 'zap' | 'users';
+};
+
+/**
+ * Calculate secondary metrics for the overview dashboard
+ */
+export function deriveSecondaryMetrics(streams: DashboardStream[], activities: ActivityLogEntry[]): SecondaryMetric[] {
+  // Count pending actions (streams with low runway + inactive streams)
+  const lowRunwayCount = streams.filter((stream) => {
+    if (stream.hourlyRate <= 0) return false;
+    const runwayHours = stream.vaultBalance / stream.hourlyRate;
+    return Number.isFinite(runwayHours) && runwayHours > 0 && runwayHours <= 72;
+  }).length;
+
+  const suspendedCount = streams.filter((stream) => stream.status === 'suspended').length;
+  const pendingActions = lowRunwayCount + suspendedCount;
+
+  // Count inactivity risk (25+ days inactive)
+  const inactivityRiskCount = streams.filter((stream) => {
+    const hoursSinceActivity = parseHoursSince(stream.lastActivityAt);
+    return hoursSinceActivity != null && hoursSinceActivity >= 24 * 25;
+  }).length;
+
+  // Count emergency withdrawals (clawbacks) in last 30 days
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const clawbackCount = activities.filter((activity) => {
+    const activityDate = parseISO(activity.occurredAt);
+    return activity.activityType === 'stream_emergency_withdraw' && activityDate >= thirtyDaysAgo;
+  }).length;
+
+  // Calculate token health (percentage of streams with adequate funding)
+  const activeStreams = streams.filter((stream) => stream.status === 'active');
+  const healthyStreams = activeStreams.filter((stream) => {
+    if (stream.hourlyRate <= 0) return true;
+    const runwayHours = stream.vaultBalance / stream.hourlyRate;
+    return Number.isFinite(runwayHours) && runwayHours > 72; // More than 3 days
+  }).length;
+  const tokenHealthPercentage =
+    activeStreams.length > 0 ? Math.round((healthyStreams / activeStreams.length) * 100) : 100;
+
+  return [
+    {
+      id: 'pending-actions',
+      label: 'Pending Actions',
+      value: pendingActions,
+      description: 'Require attention',
+      icon: 'alert',
+    },
+    {
+      id: 'inactivity-risk',
+      label: 'Inactivity Risk',
+      value: inactivityRiskCount,
+      description: '25+ days inactive',
+      icon: 'trending-down',
+    },
+    {
+      id: 'clawbacks',
+      label: 'Clawbacks (30d)',
+      value: clawbackCount,
+      description: 'Emergency withdrawals',
+      icon: 'zap',
+    },
+    {
+      id: 'token-health',
+      label: 'Token Health',
+      value: `${tokenHealthPercentage}%`,
+      description: 'Above threshold',
+      icon: 'users',
+    },
+  ];
+}

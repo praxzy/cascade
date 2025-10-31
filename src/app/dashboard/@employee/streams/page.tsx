@@ -147,15 +147,7 @@ export default function EmployeeStreamsPage() {
                     </code>
                   </div>
                   {stream.availableBalance > 0 && (
-                    <Button
-                      className="gap-2"
-                      onClick={() =>
-                        handleWithdrawClick({
-                          ...stream,
-                          employerWallet: stream.employerAddress,
-                        })
-                      }
-                    >
+                    <Button className="gap-2" onClick={() => handleWithdrawClick(stream)}>
                       <ArrowDownToLine className="h-4 w-4" />
                       Withdraw ${stream.availableBalance.toFixed(2)}
                     </Button>

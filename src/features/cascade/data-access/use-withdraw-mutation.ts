@@ -39,10 +39,12 @@ async function waitForSignatureConfirmation(
     return;
   }
 
+  const getSignatureStatuses = client.rpc.getSignatureStatuses;
+
   // Poll for confirmation up to the configured attempts.
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const response = await client.rpc.getSignatureStatuses([signature]).send();
+      const response = await getSignatureStatuses([signature] as Parameters<typeof getSignatureStatuses>[0]).send();
       const status = response?.value?.[0];
 
       if (status?.err) {
