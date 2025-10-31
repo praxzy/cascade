@@ -19,6 +19,7 @@ import { getErrorMessage } from '@/features/cascade/data-access/derive-cascade-p
 import { useCreateStreamMutation } from '@/features/cascade/data-access/use-create-stream-mutation';
 import { useDashboardEmployeesQuery } from '@/features/dashboard/data-access/use-dashboard-employees-query';
 import { AccountState } from '@/lib/enums';
+import { resolveMintDisplay } from '@/lib/solana/token-helpers';
 import { ellipsify } from '@/lib/utils';
 
 import { useDashboard } from '../dashboard-context';
@@ -60,17 +61,18 @@ const TOKEN_FORMATTER = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
-const KNOWN_MINT_LABELS: Record<string, string> = {
-  So11111111111111111111111111111111111111112: 'wSOL',
-};
+const HOURS_FORMATTER = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+const DAYS_FORMATTER = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
 
 function formatTokenAmount(amount: number) {
   return TOKEN_FORMATTER.format(amount);
-}
-
-function getMintLabel(mint: string) {
-  if (!mint) return 'Unknown mint';
-  return KNOWN_MINT_LABELS[mint] ?? ellipsify(mint, 4);
 }
 
 export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
@@ -84,7 +86,7 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const router = useRouter();
   const { completeSetupStep, setAccountState, selectedEmployee } = useDashboard();
-  const { account } = useWalletUi();
+  const { account, cluster } = useWalletUi();
   const createStreamMutation = useCreateStreamMutation({ account: account as UiWalletAccount });
 
   const employerAddress = useMemo<Address | null>(() => {
@@ -149,6 +151,8 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
   );
 
   const selectedMint = selectedTokenAccountOption?.mint ?? '';
+  const { symbol: tokenSymbol, detail: tokenDetail } = useMemo(() => resolveMintDisplay(selectedMint), [selectedMint]);
+  const isGenericTokenSymbol = tokenSymbol.toLowerCase() === 'spl token' || tokenSymbol.toLowerCase() === 'token';
   const tokenAccountsError = (tokenAccountsQuery.error ?? null) as Error | null;
 
   const effectiveEmployeeAddress = employeeAddressOverride || selectedEmployeeOption?.wallet || '';
@@ -175,10 +179,52 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
     }
   }, [isOpen, selectedTokenAccount, tokenAccountOptions]);
 
-  const calculateRunway = () => {
-    if (!hourlyRate || !initialDeposit) return 0;
-    return Math.floor((Number.parseFloat(initialDeposit) / Number.parseFloat(hourlyRate)) * 24);
-  };
+  const economicsSummary = useMemo(() => {
+    const parsedRate = Number.parseFloat(hourlyRate);
+    const parsedDeposit = Number.parseFloat(initialDeposit);
+
+    const validRate = Number.isFinite(parsedRate) && parsedRate > 0;
+    const validDeposit = Number.isFinite(parsedDeposit) && parsedDeposit > 0;
+
+    const spendPerDay = validRate ? parsedRate * 24 : null;
+    const spendPerWeek = spendPerDay != null ? spendPerDay * 7 : null;
+    const spendPerMonth = spendPerDay != null ? spendPerDay * 30 : null;
+    const coverageHours = validRate && validDeposit ? parsedDeposit / parsedRate : null;
+    const coverageDays = coverageHours != null ? coverageHours / 24 : null;
+
+    return {
+      rate: validRate ? parsedRate : 0,
+      deposit: validDeposit ? parsedDeposit : 0,
+      validRate,
+      validDeposit,
+      spendPerDay,
+      spendPerWeek,
+      spendPerMonth,
+      coverageHours,
+      coverageDays,
+    };
+  }, [hourlyRate, initialDeposit]);
+
+  const runwayHoursDisplay =
+    economicsSummary.coverageHours != null && Number.isFinite(economicsSummary.coverageHours)
+      ? HOURS_FORMATTER.format(economicsSummary.coverageHours)
+      : null;
+  const runwayDaysDisplay =
+    economicsSummary.coverageDays != null && Number.isFinite(economicsSummary.coverageDays)
+      ? DAYS_FORMATTER.format(economicsSummary.coverageDays)
+      : null;
+  const dailySpendDisplay =
+    economicsSummary.spendPerDay != null && Number.isFinite(economicsSummary.spendPerDay)
+      ? formatTokenAmount(economicsSummary.spendPerDay)
+      : null;
+  const weeklySpendDisplay =
+    economicsSummary.spendPerWeek != null && Number.isFinite(economicsSummary.spendPerWeek)
+      ? formatTokenAmount(economicsSummary.spendPerWeek)
+      : null;
+  const monthlySpendDisplay =
+    economicsSummary.spendPerMonth != null && Number.isFinite(economicsSummary.spendPerMonth)
+      ? formatTokenAmount(economicsSummary.spendPerMonth)
+      : null;
 
   const resetForm = () => {
     setCurrentStep('employee');
@@ -229,17 +275,14 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
       return;
     }
 
-    const parsedHourlyRate = Number.parseFloat(hourlyRate || '0');
-    const parsedDeposit = Number.parseFloat(initialDeposit || '0');
-
-    if (!Number.isFinite(parsedHourlyRate) || parsedHourlyRate <= 0) {
+    if (!economicsSummary.validRate) {
       toast.error('Invalid hourly rate', {
         description: 'Enter an hourly rate greater than zero.',
       });
       return;
     }
 
-    if (!Number.isFinite(parsedDeposit) || parsedDeposit <= 0) {
+    if (!economicsSummary.validDeposit) {
       toast.error('Invalid deposit amount', {
         description: 'Enter an initial deposit greater than zero.',
       });
@@ -251,10 +294,12 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
     try {
       await createStreamMutation.mutateAsync({
         employee: effectiveEmployeeAddress as Address,
+        employeeId: selectedEmployeeId || undefined,
         mint: selectedTokenAccountOption.mint as Address,
         employerTokenAccount: selectedTokenAccountOption.address as Address,
-        hourlyRate: parsedHourlyRate,
-        totalDeposit: parsedDeposit,
+        hourlyRate: economicsSummary.rate,
+        totalDeposit: economicsSummary.deposit,
+        cluster: cluster.id as 'devnet' | 'testnet' | 'mainnet' | 'localnet' | 'custom',
       });
       toast.success('Stream created successfully!', {
         description: `Payment stream for ${selectedEmployeeOption?.name ?? ellipsify(effectiveEmployeeAddress, 4)} has been created.`,
@@ -290,7 +335,7 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
       case 'token':
         return Boolean(selectedTokenAccount) && !tokenAccountsQuery.isLoading && !tokenAccountsError;
       case 'economics':
-        return hourlyRate && initialDeposit;
+        return economicsSummary.validRate && economicsSummary.validDeposit;
       case 'review':
         return true;
       default:
@@ -388,25 +433,36 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {tokenAccountOptions.map((accountOption) => (
-                    <button
-                      key={accountOption.address}
-                      onClick={() => setSelectedTokenAccount(accountOption.address)}
-                      className={`w-full rounded-lg border p-3 text-left transition-colors ${
-                        selectedTokenAccount === accountOption.address
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:bg-muted/50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{getMintLabel(accountOption.mint)}</p>
-                          <code className="text-xs text-muted-foreground">{ellipsify(accountOption.address, 6)}</code>
+                  {tokenAccountOptions.map((accountOption) => {
+                    const mintDisplay = resolveMintDisplay(accountOption.mint);
+
+                    return (
+                      <button
+                        key={accountOption.address}
+                        onClick={() => setSelectedTokenAccount(accountOption.address)}
+                        className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                          selectedTokenAccount === accountOption.address
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:bg-muted/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="font-medium">{mintDisplay.symbol}</p>
+                            <div className="flex items-center gap-2">
+                              {mintDisplay.detail ? (
+                                <code className="text-xs text-muted-foreground">Mint {mintDisplay.detail}</code>
+                              ) : null}
+                              <code className="text-xs text-muted-foreground">
+                                Account {ellipsify(accountOption.address, 4)}
+                              </code>
+                            </div>
+                          </div>
+                          <Badge variant="outline">{formatTokenAmount(accountOption.balance)}</Badge>
                         </div>
-                        <Badge variant="outline">{formatTokenAmount(accountOption.balance)}</Badge>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -430,8 +486,61 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
                 <Input id="initialDeposit" value={initialDeposit} onChange={(e) => setInitialDeposit(e.target.value)} />
               </div>
 
-              <div>
-                <p className="font-semibold">Runway: {calculateRunway()} hours</p>
+              <div className="rounded-xl border border-dashed border-border/60 bg-muted/40 p-4 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Quick math</p>
+                <div className="mt-3 flex flex-col gap-2 text-xs leading-relaxed sm:flex-row sm:items-start sm:gap-6">
+                  <div className="flex-1">
+                    <span className="font-medium text-foreground">Hourly rate</span> controls the continuous trickle of{' '}
+                    {isGenericTokenSymbol ? 'your token' : tokenSymbol}. Enter a number to reveal the spend cards below.
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-medium text-foreground">Deposit ÷ hourly rate</span> shows how long the stream
+                    stays funded before another top up is needed.
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-2 rounded-xl border bg-background/80 p-4 shadow-sm">
+                  <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Daily Spend</p>
+                  <div>
+                    <p className="text-2xl font-semibold text-foreground">
+                      {dailySpendDisplay ? dailySpendDisplay : '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {tokenSymbol}
+                      {tokenDetail ? (
+                        <code className="ml-1 rounded bg-muted px-1 py-px text-[10px] text-muted-foreground">
+                          Mint {tokenDetail}
+                        </code>
+                      ) : null}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Autostreamed every 24 hours.</p>
+                </div>
+                <div className="flex flex-col gap-2 rounded-xl border bg-background/80 p-4 shadow-sm">
+                  <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Weekly Spend</p>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {weeklySpendDisplay ? weeklySpendDisplay : '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Seven days of continuous payout.</p>
+                </div>
+                <div className="flex flex-col gap-2 rounded-xl border bg-background/80 p-4 shadow-sm">
+                  <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Monthly Spend</p>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {monthlySpendDisplay ? monthlySpendDisplay : '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Roughly thirty streaming days.</p>
+                </div>
+                <div className="flex flex-col gap-2 rounded-xl border bg-background/80 p-4 shadow-sm">
+                  <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Funded Runway</p>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {runwayHoursDisplay
+                      ? `${runwayHoursDisplay}h${runwayDaysDisplay ? ` · ${runwayDaysDisplay}d` : ''}`
+                      : '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Top up before this window closes.</p>
+                </div>
               </div>
             </div>
           )}
@@ -460,9 +569,10 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
                     <CardTitle>Token</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p>{getMintLabel(selectedMint)}</p>
-                    <code className="text-xs text-muted-foreground">
-                      {ellipsify(selectedTokenAccountOption?.address ?? '', 6)}
+                    <p>{tokenSymbol}</p>
+                    {tokenDetail ? <code className="text-xs text-muted-foreground">Mint {tokenDetail}</code> : null}
+                    <code className="mt-1 block text-xs text-muted-foreground">
+                      Account {ellipsify(selectedTokenAccountOption?.address ?? '', 6)}
                     </code>
                   </CardContent>
                 </Card>
@@ -472,9 +582,36 @@ export function CreateStreamModal({ isOpen, onClose }: CreateStreamModalProps) {
                     <CardTitle>Economics</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p>Hourly Rate: {hourlyRate}</p>
-                    <p>Initial Deposit: {initialDeposit}</p>
-                    <p>Runway: {calculateRunway()} hours</p>
+                    <p>
+                      Hourly Rate:{' '}
+                      {economicsSummary.validRate
+                        ? `${formatTokenAmount(economicsSummary.rate)} ${tokenSymbol}/hour`
+                        : '—'}
+                    </p>
+                    <p>
+                      Weekly Spend:{' '}
+                      {economicsSummary.validRate && weeklySpendDisplay
+                        ? `${weeklySpendDisplay} ${tokenSymbol}/week`
+                        : '—'}
+                    </p>
+                    <p>
+                      Monthly Spend:{' '}
+                      {economicsSummary.validRate && monthlySpendDisplay
+                        ? `${monthlySpendDisplay} ${tokenSymbol}/month`
+                        : '—'}
+                    </p>
+                    <p>
+                      Initial Deposit:{' '}
+                      {economicsSummary.validDeposit
+                        ? `${formatTokenAmount(economicsSummary.deposit)} ${tokenSymbol}`
+                        : '—'}
+                    </p>
+                    <p>
+                      Runway:{' '}
+                      {economicsSummary.validRate && economicsSummary.validDeposit && runwayHoursDisplay
+                        ? `${runwayHoursDisplay} hours${runwayDaysDisplay ? ` (${runwayDaysDisplay} days)` : ''}`
+                        : '—'}
+                    </p>
                   </CardContent>
                 </Card>
 

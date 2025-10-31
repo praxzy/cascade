@@ -4,10 +4,15 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { useWalletUi } from '@wallet-ui/react';
+import type { Address } from 'gill';
 import { PiggyBank, Plus, UserPlus, Wallet } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { useGetTokenAccountsQuery } from '@/features/account/data-access/use-get-token-accounts-query';
+import { useDashboardEmployeesQuery } from '@/features/dashboard/data-access/use-dashboard-employees-query';
 import { useDashboardStreamsQuery } from '@/features/dashboard/data-access/use-dashboard-streams-query';
+import { hasPositiveTokenBalance, NULL_ADDRESS } from '@/lib/solana/token-helpers';
 import type { DashboardStream } from '@/types/stream';
 
 import { useDashboard } from '../dashboard-context';
@@ -70,6 +75,18 @@ export function StreamsTab({ filterState, streams }: StreamsTabProps) {
   const [isPending, startTransition] = useTransition();
   const [optimisticPageKey, setOptimisticPageKey] = useState(filterState);
   const { data: streamData = [], isFetching } = useDashboardStreamsQuery({ initialData: streams });
+  const { data: employees = [] } = useDashboardEmployeesQuery();
+  const { account } = useWalletUi();
+  const walletAddress = (account?.address as Address) ?? NULL_ADDRESS;
+  const tokenAccountsQuery = useGetTokenAccountsQuery({ address: walletAddress, enabled: Boolean(account?.address) });
+  const hasStreams = streamData.length > 0;
+  const hasEmployees = employees.length > 0;
+  const walletConnected = setupProgress.walletConnected || Boolean(account?.address);
+  const tokenFundingComplete = useMemo(
+    () => setupProgress.tokenAccountFunded || hasPositiveTokenBalance(tokenAccountsQuery.data),
+    [setupProgress.tokenAccountFunded, tokenAccountsQuery.data],
+  );
+  const employeeStepComplete = setupProgress.employeeAdded || hasEmployees;
 
   useEffect(() => {
     setOptimisticPageKey(filterState);
@@ -96,8 +113,6 @@ export function StreamsTab({ filterState, streams }: StreamsTabProps) {
     }
   }, [selectedStream, selectedStreamId, setSelectedStreamId]);
 
-  const hasStreams = streamData.length > 0;
-
   const handleFilterChange = (status: StreamFilterStatus) => {
     const nextPageKey = mapStatusToPageKey[status];
     setOptimisticPageKey(nextPageKey);
@@ -117,20 +132,20 @@ export function StreamsTab({ filterState, streams }: StreamsTabProps) {
         <Button
           onClick={() => setIsCreateStreamModalOpen(true)}
           className="gap-2"
-          disabled={!setupProgress.employeeAdded || !setupProgress.tokenAccountFunded}
+          disabled={!employeeStepComplete || !tokenFundingComplete}
         >
           <Plus className="h-4 w-4" />
           New Stream
         </Button>
       </div>
 
-      {!setupProgress.walletConnected ? (
+      {!walletConnected ? (
         <EmptyState
           icon={<Wallet className="h-12 w-12 text-muted-foreground" />}
           title="Connect your treasury wallet"
           description="Link the employer wallet to view, fund, or create payment streams."
         />
-      ) : !setupProgress.tokenAccountFunded ? (
+      ) : !tokenFundingComplete ? (
         <EmptyState
           icon={<PiggyBank className="h-12 w-12 text-muted-foreground" />}
           title="Fund your primary token account"
@@ -140,7 +155,7 @@ export function StreamsTab({ filterState, streams }: StreamsTabProps) {
             onClick: () => setIsTopUpAccountModalOpen(true),
           }}
         />
-      ) : !setupProgress.employeeAdded ? (
+      ) : !employeeStepComplete ? (
         <EmptyState
           icon={<UserPlus className="h-12 w-12 text-muted-foreground" />}
           title="Add an employee to get started"

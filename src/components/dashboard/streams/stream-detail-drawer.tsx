@@ -1,8 +1,9 @@
 'use client';
 
-import { Copy, Download, ExternalLink, X } from 'lucide-react';
+import { Copy, Download, X } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { AppExplorerLink } from '@/components/app-explorer-link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer';
@@ -133,7 +134,7 @@ export function StreamDetailDrawer({ stream, onClose, isOpen }: StreamDetailDraw
               </TabsList>
 
               <TabsContent value="activity" className="mt-3 space-y-3">
-                <StreamActivityHistory />
+                <StreamActivityHistory streamId={stream.id} />
               </TabsContent>
 
               <TabsContent value="details" className="mt-3 space-y-3">
@@ -192,9 +193,12 @@ export function StreamDetailDrawer({ stream, onClose, isOpen }: StreamDetailDraw
                       <p className="pt-1 text-xs text-muted-foreground">{stream.mintLabel}</p>
                     </div>
                     <div className="flex gap-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1 gap-2 bg-transparent">
-                        <ExternalLink className="h-4 w-4" />
-                        Explorer
+                      <Button variant="outline" size="sm" className="flex-1 gap-2 bg-transparent" asChild>
+                        <AppExplorerLink
+                          address={stream.streamAddress}
+                          label="Explorer"
+                          className="inline-flex items-center justify-center gap-2"
+                        />
                       </Button>
                       <Button variant="outline" size="sm" className="flex-1 gap-2 bg-transparent">
                         <Download className="h-4 w-4" />
